@@ -1325,6 +1325,83 @@ static int parse_named_func_item(parser_t *p, cbm_return_item_t *item) {
     return 0;
 }
 
+/* Canonical name for a multi-argument scalar function, or NULL. */
+static const char *multiarg_func_canonical(const char *s) {
+    static const char *const names[] = {"coalesce", "substring", "replace", "left", "right", NULL};
+    for (int i = 0; names[i]; i++) {
+        if (cyp_ci_eq(s, names[i])) {
+            return names[i];
+        }
+    }
+    return NULL;
+}
+
+static bool is_multiarg_func_call(parser_t *p) {
+    if (!check(p, TOK_IDENT) || p->pos + SKIP_ONE >= p->count) {
+        return false;
+    }
+    if (p->tokens[p->pos + SKIP_ONE].type != TOK_LPAREN) {
+        return false;
+    }
+    return multiarg_func_canonical(peek(p)->text) != NULL;
+}
+
+/* Parse one function argument: a string/number literal or a var[.prop]. */
+static int parse_func_arg(parser_t *p, cbm_func_arg_t *arg) {
+    memset(arg, 0, sizeof(*arg));
+    if (check(p, TOK_STRING) || check(p, TOK_NUMBER)) {
+        arg->literal = heap_strdup(peek(p)->text);
+        advance(p);
+        return 0;
+    }
+    const cbm_token_t *var = expect(p, TOK_IDENT);
+    if (!var) {
+        return CBM_NOT_FOUND;
+    }
+    arg->variable = heap_strdup(var->text);
+    if (match(p, TOK_DOT)) {
+        const cbm_token_t *prop = expect(p, TOK_IDENT);
+        if (prop) {
+            arg->property = heap_strdup(prop->text);
+        }
+    }
+    return 0;
+}
+
+/* Parse a multi-argument scalar call: coalesce(a, b, ...), substring(s, i[, n]),
+ * replace(s, from, to), left(s, n), right(s, n). */
+static int parse_multiarg_func_item(parser_t *p, cbm_return_item_t *item) {
+    const char *canon = multiarg_func_canonical(peek(p)->text);
+    advance(p); /* function name */
+    expect(p, TOK_LPAREN);
+    int cap = CYP_INIT_CAP4;
+    item->args = malloc((size_t)cap * sizeof(cbm_func_arg_t));
+    item->arg_count = 0;
+    while (!check(p, TOK_RPAREN) && !check(p, TOK_EOF)) {
+        if (item->arg_count > 0 && !match(p, TOK_COMMA)) {
+            break;
+        }
+        if (item->arg_count >= cap) {
+            cap *= PAIR_LEN;
+            item->args = safe_realloc(item->args, (size_t)cap * sizeof(cbm_func_arg_t));
+        }
+        if (parse_func_arg(p, &item->args[item->arg_count]) < 0) {
+            return CBM_NOT_FOUND;
+        }
+        item->arg_count++;
+    }
+    expect(p, TOK_RPAREN);
+    item->func = heap_strdup(canon);
+    /* Surface the first variable arg as variable/property for column naming. */
+    if (item->arg_count > 0 && item->args[0].variable) {
+        item->variable = heap_strdup(item->args[0].variable);
+        if (item->args[0].property) {
+            item->property = heap_strdup(item->args[0].property);
+        }
+    }
+    return 0;
+}
+
 /* Parse aggregate function call: COUNT(var.prop) */
 static int parse_aggregate_item(parser_t *p, cbm_return_item_t *item) {
     cbm_token_type_t ft = peek(p)->type;
@@ -1368,6 +1445,8 @@ static int parse_return_item(parser_t *p, cbm_return_item_t *item) {
         rc = parse_aggregate_item(p, item);
     } else if (is_string_func_tok(peek(p)->type)) {
         rc = parse_string_func_item(p, item);
+    } else if (is_multiarg_func_call(p)) {
+        rc = parse_multiarg_func_item(p, item);
     } else if (is_named_func_call(p)) {
         rc = parse_named_func_item(p, item);
     } else {
@@ -1818,6 +1897,12 @@ static void free_return_clause(cbm_return_clause_t *r) {
         safe_str_free(&r->items[i].alias);
         safe_str_free(&r->items[i].func);
         free_case_expr(r->items[i].kase);
+        for (int j = 0; j < r->items[i].arg_count; j++) {
+            safe_str_free(&r->items[i].args[j].variable);
+            safe_str_free(&r->items[i].args[j].property);
+            safe_str_free(&r->items[i].args[j].literal);
+        }
+        free(r->items[i].args);
     }
     free(r->items);
     safe_str_free(&r->order_by);
@@ -2946,10 +3031,105 @@ static const char *node_keys_list(const cbm_node_t *n, char *buf, size_t buf_sz)
     return buf;
 }
 
+/* Resolve a function argument to its string value (literal or var.prop). */
+static const char *eval_func_arg(binding_t *b, const cbm_func_arg_t *a) {
+    if (a->literal) {
+        return a->literal;
+    }
+    return binding_get_virtual(b, a->variable, a->property);
+}
+
+/* Evaluate a multi-argument scalar function into func_buf (or a direct value). */
+static const char *eval_multiarg_func(binding_t *b, const cbm_return_item_t *item, char *buf,
+                                      size_t bufsz) {
+    const char *f = item->func;
+    int n = item->arg_count;
+    if (strcmp(f, "coalesce") == 0) {
+        for (int i = 0; i < n; i++) {
+            const char *v = eval_func_arg(b, &item->args[i]);
+            if (v && v[0]) {
+                return v;
+            }
+        }
+        return "";
+    }
+    if (strcmp(f, "substring") == 0 && n >= 2) {
+        const char *s = eval_func_arg(b, &item->args[0]);
+        long start = strtol(eval_func_arg(b, &item->args[1]), NULL, CBM_DECIMAL_BASE);
+        size_t slen = strlen(s);
+        if (start < 0 || (size_t)start >= slen) {
+            return "";
+        }
+        size_t take = slen - (size_t)start;
+        if (n >= 3) {
+            long len = strtol(eval_func_arg(b, &item->args[2]), NULL, CBM_DECIMAL_BASE);
+            if (len < 0) {
+                len = 0;
+            }
+            if ((size_t)len < take) {
+                take = (size_t)len;
+            }
+        }
+        if (take >= bufsz) {
+            take = bufsz - SKIP_ONE;
+        }
+        memcpy(buf, s + start, take);
+        buf[take] = '\0';
+        return buf;
+    }
+    if ((strcmp(f, "left") == 0 || strcmp(f, "right") == 0) && n >= 2) {
+        const char *s = eval_func_arg(b, &item->args[0]);
+        long k = strtol(eval_func_arg(b, &item->args[1]), NULL, CBM_DECIMAL_BASE);
+        if (k < 0) {
+            k = 0;
+        }
+        size_t slen = strlen(s);
+        size_t take = (size_t)k < slen ? (size_t)k : slen;
+        if (take >= bufsz) {
+            take = bufsz - SKIP_ONE;
+        }
+        memcpy(buf, (strcmp(f, "left") == 0) ? s : s + (slen - take), take);
+        buf[take] = '\0';
+        return buf;
+    }
+    if (strcmp(f, "replace") == 0 && n >= 3) {
+        const char *s = eval_func_arg(b, &item->args[0]);
+        const char *from = eval_func_arg(b, &item->args[1]);
+        const char *to = eval_func_arg(b, &item->args[2]);
+        size_t fromlen = strlen(from);
+        size_t tolen = strlen(to);
+        size_t pos = 0;
+        const char *pp = s;
+        if (fromlen == 0) {
+            snprintf(buf, bufsz, "%s", s);
+            return buf;
+        }
+        while (*pp && pos < bufsz - SKIP_ONE) {
+            if (strncmp(pp, from, fromlen) == 0) {
+                size_t cpy = tolen;
+                if (pos + cpy >= bufsz) {
+                    cpy = bufsz - SKIP_ONE - pos;
+                }
+                memcpy(buf + pos, to, cpy);
+                pos += cpy;
+                pp += fromlen;
+            } else {
+                buf[pos++] = *pp++;
+            }
+        }
+        buf[pos] = '\0';
+        return buf;
+    }
+    return ""; /* wrong arity → null */
+}
+
 static const char *project_item(binding_t *b, cbm_return_item_t *item, char *func_buf,
                                 size_t buf_sz) {
     if (item->kase) {
         return eval_case_expr(item->kase, b);
+    }
+    if (item->args) {
+        return eval_multiarg_func(b, item, func_buf, buf_sz);
     }
     /* Entity-introspection functions operate on the bound node/edge itself,
      * not on a scalar property value. */

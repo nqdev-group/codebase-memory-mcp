@@ -663,6 +663,27 @@ TEST(cypher_func_size_reverse) {
     PASS();
 }
 
+TEST(cypher_func_multiarg) {
+    cbm_store_t *s = setup_cypher_store();
+    cbm_cypher_result_t r = {0};
+    int rc = cbm_cypher_execute(s,
+                                "MATCH (f:Function) WHERE f.name = \"HandleOrder\" "
+                                "RETURN substring(f.name, 0, 6), left(f.name, 6), "
+                                "right(f.name, 5), replace(f.name, \"Order\", \"Req\"), "
+                                "coalesce(f.missing, \"fallback\")",
+                                "test", 0, &r);
+    ASSERT_EQ(rc, 0);
+    ASSERT_EQ(r.row_count, 1);
+    ASSERT_STR_EQ(r.rows[0][0], "Handle");    /* substring("HandleOrder",0,6) */
+    ASSERT_STR_EQ(r.rows[0][1], "Handle");    /* left(...,6) */
+    ASSERT_STR_EQ(r.rows[0][2], "Order");     /* right("HandleOrder",5) */
+    ASSERT_STR_EQ(r.rows[0][3], "HandleReq"); /* replace Order->Req */
+    ASSERT_STR_EQ(r.rows[0][4], "fallback");  /* coalesce: f.missing empty -> literal */
+    cbm_cypher_result_free(&r);
+    cbm_store_close(s);
+    PASS();
+}
+
 TEST(cypher_exec_calls_relationship) {
     cbm_store_t *s = setup_cypher_store();
     cbm_cypher_result_t r = {0};
@@ -2459,6 +2480,7 @@ SUITE(cypher) {
     RUN_TEST(cypher_func_properties);
     RUN_TEST(cypher_func_tointeger_tofloat);
     RUN_TEST(cypher_func_size_reverse);
+    RUN_TEST(cypher_func_multiarg);
     RUN_TEST(cypher_exec_calls_relationship);
     RUN_TEST(cypher_exec_calls_with_where);
     RUN_TEST(cypher_exec_inbound);

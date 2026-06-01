@@ -255,6 +255,14 @@ case "$SZV" in
   *) echo "OK: query_graph size(f.name) = $SZV" ;;
 esac
 
+# multi-arg functions: substring + coalesce
+SUBV=$(cyp_first_cell 'MATCH (f:Function) RETURN substring(f.name, 0, 3) AS s LIMIT 1')
+if [ -z "$SUBV" ]; then echo "FAIL: query_graph substring(...) returned empty"; exit 1; fi
+echo "OK: query_graph substring(f.name,0,3) = $SUBV"
+COALV=$(cyp_first_cell 'MATCH (f:Function) RETURN coalesce(f.nonesuch, f.name) AS c LIMIT 1')
+if [ -z "$COALV" ]; then echo "FAIL: query_graph coalesce(...) returned empty"; exit 1; fi
+echo "OK: query_graph coalesce(f.nonesuch, f.name) = $COALV"
+
 # =~ regex match in WHERE
 CYPHER_RX=$(cli query_graph "{\"project\":\"$PROJECT\",\"query\":\"MATCH (f:Function) WHERE f.name =~ \\\".+\\\" RETURN f.name\"}")
 RX_ROWS=$(echo "$CYPHER_RX" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(len(d.get('rows',[])))" 2>/dev/null || echo "0")
