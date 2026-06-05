@@ -823,6 +823,7 @@ static const char *makefile_import_types[] = {"include_directive", "include", NU
 static const char *makefile_var_types[] = {"variable_assignment", NULL};
 
 // ==================== CMAKE ====================
+static const char *cmake_func_types[] = {"function_def", "macro_def", NULL};
 static const char *cmake_module_types[] = {"source_file", NULL};
 static const char *cmake_call_types[] = {"normal_command", NULL};
 
@@ -1210,7 +1211,8 @@ static const char *hare_branch_types[] = {"if_statement", "for_statement", "swit
 static const char *hare_var_types[] = {"let_declaration", "const_declaration", NULL};
 static const char *hare_assign_types[] = {"assignment_expression", NULL};
 static const char *hare_module_types[] = {"source_file", NULL};
-static const char *pony_func_types[] = {"fun", "be", "new", "lambda_expression", NULL};
+static const char *pony_func_types[] = {"method", "constructor", "ffi_method",
+                                        "lambda_expression", NULL};
 static const char *pony_class_types[] = {
     "actor_definition",     "class_definition",     "struct_definition", "trait_definition",
     "interface_definition", "primitive_definition", "type_alias",        NULL};
@@ -1246,11 +1248,13 @@ static const char *sway_branch_types[] = {"if_expression", "match_expression", "
 static const char *sway_var_types[] = {"let_declaration", "const_item", NULL};
 static const char *sway_assign_types[] = {"assignment_expression", NULL};
 static const char *sway_module_types[] = {"source_file", NULL};
+static const char *nasm_func_types[] = {"label", "preproc_def", "preproc_multiline_macro", NULL};
 static const char *nasm_class_types[] = {"struc_declaration", NULL};
 static const char *nasm_call_types[] = {"call_syntax_expression", NULL};
 static const char *nasm_import_types[] = {"preproc_include", NULL};
 static const char *nasm_var_types[] = {"label", NULL};
 static const char *nasm_module_types[] = {"source_file", NULL};
+static const char *assembly_func_types[] = {"label", NULL};
 static const char *assembly_var_types[] = {"label", NULL};
 static const char *assembly_module_types[] = {"program", NULL};
 static const char *astro_module_types[] = {"document", NULL};
@@ -1317,8 +1321,10 @@ static const char *thrift_import_types[] = {"include_statement", "extends", "inc
 static const char *thrift_var_types[] = {"const_definition", NULL};
 static const char *thrift_module_types[] = {"document", NULL};
 static const char *capnp_func_types[] = {"method", NULL};
-static const char *capnp_class_types[] = {"struct",          "enum", "interface", "custom_type",
-                                          "type_definition", NULL};
+/* custom_type (a type REFERENCE inside field_type) and type_definition (LHS of a
+ * `using X = ...` directive) are not top-level type defs — including them would
+ * mint spurious Class nodes for every typed field/return. */
+static const char *capnp_class_types[] = {"struct", "enum", "interface", NULL};
 static const char *capnp_field_types[] = {"field", NULL};
 static const char *capnp_import_types[] = {"import", "extends", "using_directive", NULL};
 static const char *capnp_var_types[] = {"const", NULL};
@@ -1372,7 +1378,7 @@ static const char *vhdl_branch_types[] = {"if_statement", "case_statement", "loo
 static const char *vhdl_var_types[] = {"variable_declaration", "signal_declaration",
                                        "constant_declaration", NULL};
 static const char *vhdl_assign_types[] = {"variable_assignment", "signal_assignment", NULL};
-static const char *vhdl_func_types[] = {"subprogram_declaration", NULL};
+static const char *vhdl_func_types[] = {"subprogram_declaration", "subprogram_definition", NULL};
 static const char *vhdl_module_types[] = {"design_file", NULL};
 static const char *systemverilog_func_types[] = {"function_declaration", "task_declaration",
                                                  "function_body_declaration", "function_statement",
@@ -1421,6 +1427,8 @@ static const char *smali_class_types[] = {"class_definition", NULL};
 static const char *smali_field_types[] = {"field_definition", NULL};
 static const char *smali_import_types[] = {"super_directive", "implements_directive", NULL};
 static const char *smali_module_types[] = {"source_file", NULL};
+static const char *tablegen_func_types[] = {"def", "multiclass", "defm", NULL};
+static const char *tablegen_class_types[] = {"class", NULL};
 static const char *tablegen_import_types[] = {"include", "include_directive", NULL};
 static const char *tablegen_module_types[] = {"source_file", NULL};
 static const char *ispc_func_types[] = {"function_definition", NULL};
@@ -1445,7 +1453,9 @@ static const char *cairo_var_types[] = {"let_declaration", "const_item", NULL};
 static const char *cairo_assign_types[] = {"assignment_expression", NULL};
 static const char *cairo_module_types[] = {"source_file", NULL};
 static const char *move_func_types[] = {"function_item", NULL};
-static const char *move_class_types[] = {"struct", "enum", NULL};
+/* This vendored move grammar models only function_item + module as named defs;
+ * "struct"/"enum" exist only as anonymous keyword tokens, never as parent nodes,
+ * so there is no class/struct/enum definition node to match. */
 static const char *move_call_types[] = {"call_expression", NULL};
 static const char *move_import_types[] = {"use_declaration", NULL};
 static const char *move_branch_types[] = {"if_expression", "while_expression", "loop_expression",
@@ -1508,7 +1518,8 @@ static const char *smithy_field_types[] = {"shape_member", NULL};
 static const char *smithy_import_types[] = {"use_statement", NULL};
 static const char *smithy_module_types[] = {"source_file", NULL};
 static const char *wit_func_types[] = {"func_item", "resource_method", NULL};
-static const char *wit_class_types[] = {"record_item", "resource_item", NULL};
+static const char *wit_class_types[] = {"record_item", "resource_item", "enum_items",
+                                        "variant_items", "flags_items", NULL};
 static const char *wit_field_types[] = {"record_field", NULL};
 static const char *wit_import_types[] = {
     "import_item", "toplevel_use_item", "export_item", "import", "include", "include_item", NULL};
@@ -1549,7 +1560,6 @@ static const char *soql_module_types[] = {"source_file", NULL};
 static const char *sosl_import_types[] = {"with_clause", NULL};
 static const char *sosl_module_types[] = {"source_file", NULL};
 
-static const char *make_func_types[] = {"recipe", NULL};
 static const char *make_import_types[] = {"include", "include_directive", NULL};
 
 // ==================== PINE SCRIPT ====================
@@ -1888,7 +1898,7 @@ static const CBMLangSpec lang_specs[CBM_LANG_COUNT] = {
                            NULL, empty_types, NULL, NULL, tree_sitter_make, NULL},
 
     // CBM_LANG_CMAKE
-    [CBM_LANG_CMAKE] = {CBM_LANG_CMAKE, make_func_types, empty_types, empty_types,
+    [CBM_LANG_CMAKE] = {CBM_LANG_CMAKE, cmake_func_types, empty_types, empty_types,
                         cmake_module_types, cmake_call_types, make_import_types, empty_types,
                         empty_types, empty_types, empty_types, empty_types, NULL, empty_types, NULL,
                         NULL, tree_sitter_cmake, NULL},
@@ -2162,13 +2172,13 @@ static const CBMLangSpec lang_specs[CBM_LANG_COUNT] = {
                        empty_types, NULL, NULL, tree_sitter_sway, NULL},
 
     // CBM_LANG_NASM
-    [CBM_LANG_NASM] = {CBM_LANG_NASM, empty_types, nasm_class_types, empty_types, nasm_module_types,
+    [CBM_LANG_NASM] = {CBM_LANG_NASM, nasm_func_types, nasm_class_types, empty_types, nasm_module_types,
                        nasm_call_types, nasm_import_types, empty_types, empty_types, nasm_var_types,
                        empty_types, empty_types, NULL, empty_types, NULL, NULL, tree_sitter_nasm,
                        NULL},
 
     // CBM_LANG_ASSEMBLY
-    [CBM_LANG_ASSEMBLY] = {CBM_LANG_ASSEMBLY, empty_types, empty_types, empty_types,
+    [CBM_LANG_ASSEMBLY] = {CBM_LANG_ASSEMBLY, assembly_func_types, empty_types, empty_types,
                            assembly_module_types, empty_types, empty_types, empty_types,
                            empty_types, assembly_var_types, empty_types, empty_types, NULL,
                            empty_types, NULL, NULL, tree_sitter_asm, NULL},
@@ -2379,7 +2389,7 @@ static const CBMLangSpec lang_specs[CBM_LANG_COUNT] = {
                         NULL, tree_sitter_smali, NULL},
 
     // CBM_LANG_TABLEGEN
-    [CBM_LANG_TABLEGEN] = {CBM_LANG_TABLEGEN, empty_types, empty_types, empty_types,
+    [CBM_LANG_TABLEGEN] = {CBM_LANG_TABLEGEN, tablegen_func_types, tablegen_class_types, empty_types,
                            tablegen_module_types, empty_types, tablegen_import_types, empty_types,
                            empty_types, empty_types, empty_types, empty_types, NULL, empty_types,
                            NULL, NULL, tree_sitter_tablegen, NULL},
@@ -2397,7 +2407,7 @@ static const CBMLangSpec lang_specs[CBM_LANG_COUNT] = {
                         empty_types, NULL, NULL, tree_sitter_cairo, NULL},
 
     // CBM_LANG_MOVE
-    [CBM_LANG_MOVE] = {CBM_LANG_MOVE, move_func_types, move_class_types, empty_types,
+    [CBM_LANG_MOVE] = {CBM_LANG_MOVE, move_func_types, empty_types, empty_types,
                        move_module_types, move_call_types, move_import_types, empty_types,
                        move_branch_types, move_var_types, move_assign_types, empty_types, NULL,
                        empty_types, NULL, NULL, tree_sitter_move, NULL},

@@ -395,17 +395,29 @@ static char *extract_ada_callee(CBMArena *a, TSNode node, const char *source, co
     return NULL;
 }
 
-// Solidity: a call_expression's first named child is the callee.
+// Solidity: a call_expression's callee is on the `function` field, wrapped in an
+// `expression` node (call_expression -> function:expression -> identifier). Descend
+// left-most through expression wrappers until we reach the identifier/member.
 static char *extract_solidity_callee(CBMArena *a, TSNode node, const char *source, const char *nk) {
     if (strcmp(nk, "call_expression") != 0 && strcmp(nk, "call") != 0) {
         return NULL;
     }
-    if (ts_node_named_child_count(node) > 0) {
-        TSNode head = ts_node_named_child(node, 0);
+    TSNode head = ts_node_child_by_field_name(node, TS_FIELD("function"));
+    if (ts_node_is_null(head) && ts_node_named_child_count(node) > 0) {
+        head = ts_node_named_child(node, 0);
+    }
+    // Unwrap nested `expression` wrappers down to the callee identifier/member.
+    for (int depth = 0; depth < 4 && !ts_node_is_null(head); depth++) {
         const char *hk = ts_node_type(head);
-        if (strcmp(hk, "identifier") == 0 || strcmp(hk, "member_expression") == 0) {
+        if (strcmp(hk, "identifier") == 0 || strcmp(hk, "member_expression") == 0 ||
+            strcmp(hk, "member_access") == 0) {
             return cbm_node_text(a, head, source);
         }
+        if (strcmp(hk, "expression") == 0 && ts_node_named_child_count(head) > 0) {
+            head = ts_node_named_child(head, 0);
+            continue;
+        }
+        break;
     }
     return NULL;
 }
@@ -418,7 +430,7 @@ static char *extract_groovy_callee(CBMArena *a, TSNode node, const char *source,
     }
     if (ts_node_named_child_count(node) > 0) {
         TSNode head = ts_node_named_child(node, 0);
-        if (strcmp(ts_node_type(head), "identifier") == 0) {
+        if (!ts_node_is_null(head) && strcmp(ts_node_type(head), "identifier") == 0) {
             return cbm_node_text(a, head, source);
         }
     }
