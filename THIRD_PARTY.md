@@ -38,11 +38,15 @@ cross-registry verification status for every grammar — is
 License summary:
 
 - Nearly all grammars are **MIT**-licensed.
-- `clojure` ([sogaiu/tree-sitter-clojure](https://github.com/sogaiu/tree-sitter-clojure)) is **CC0-1.0**.
-- The first-party grammars authored for this project (`assembly`, `cfml`,
-  `cfscript`, `cobol`, `dotenv`, `form`, `janet`, `magma`, `pine`, `protobuf`,
-  `qml`, `wolfram`) are **MIT** under the project's own license,
-  (c) DeusData.
+- `clojure` ([sogaiu/tree-sitter-clojure](https://github.com/sogaiu/tree-sitter-clojure)) is **CC0-1.0**;
+  `fennel` is **CC0-1.0**; `jinja2` and `just` are **Apache-2.0**;
+  `pine` is **ISC** (declared by its upstream).
+- The grammars authored in-house for this project (`cobol`, `form`, `janet`,
+  `magma`, `protobuf`, `wolfram`) are **MIT** under the project's own license,
+  (c) DeusData. Six further grammars (`assembly`, `cfml`, `cfscript`,
+  `dotenv`, `pine`, `qml`) are self-maintained forks that retain their
+  original upstream authors' licenses — see the manifest for per-grammar
+  provenance.
 
 ## Vendored C/C++ Libraries
 

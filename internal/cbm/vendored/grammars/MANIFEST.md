@@ -195,22 +195,34 @@ Guarded by the `contract_all_grammars_in_graph` graph-breadth test in
 
 ## First-party / self-maintained
 
-These grammars are **authored and maintained in-house** (per the maintainer) — they are not tracked by nvim-treesitter or Helix and are **not** swept from any upstream. Treat them as owned source; do not overwrite from a public repo.
+These grammars are not tracked by nvim-treesitter or Helix and are **not**
+swept from any upstream. Treat them as owned source; do not overwrite from a
+public repo. **Corrected during the byte-identity license audit 2026-06-12:**
+the original "authored in-house" classification was too coarse — six of the
+twelve are self-maintained **forks** whose vendored LICENSE names the original
+upstream author (correctly retained). The table now records the true origin.
+
+### Authored in-house (project MIT, (c) DeusData)
 
 | grammar | cur ABI | LICENSE |
 |---|:---:|:---:|
-| assembly | 14 | ✅ |
-| cfml | 15 | ✅ |
-| cfscript | 15 | ✅ |
-| cobol | 14 | ✅ |
-| dotenv | 15 | ✅ |
-| form | 15 | ✅ |
-| janet | 14 | ✅ |
-| magma | 15 | ✅ |
-| pine | 14 | ✅ |
-| protobuf | 13 | ✅ |
-| qml | 14 | ✅ |
-| wolfram | 13 | ✅ |
+| cobol | 14 | ✅ project MIT |
+| form | 15 | ✅ project MIT |
+| janet | 14 | ✅ project MIT |
+| magma | 15 | ✅ project MIT |
+| protobuf | 13 | ✅ project MIT |
+| wolfram | 13 | ✅ project MIT |
+
+### Self-maintained forks (upstream license retained, byte-verified 2026-06-12)
+
+| grammar | cur ABI | original upstream | license |
+|---|:---:|---|---|
+| assembly | 14 | RubixDev/tree-sitter-assembly (**repo deleted from GitHub** — our retained MIT copy, (c) 2023 RubixDev, is the surviving grant) | MIT |
+| cfml | 15 | cfmleditor/tree-sitter-cfml | MIT, (c) 2014 Gareth Edwards & Gavin Baumanis — byte-identical |
+| cfscript | 15 | cfmleditor/tree-sitter-cfml | MIT, same — byte-identical |
+| dotenv | 15 | pnx/tree-sitter-dotenv | MIT, (c) 2024 Henrik Hautakoski — byte-identical |
+| pine | 14 | kvarenzn/tree-sitter-pine | ISC declared in upstream package.json only (upstream publishes NO license text file); our LICENSE is a provenance notice recording that declaration |
+| qml | 14 | yuja/tree-sitter-qmljs | MIT, (c) 2021 Yuya Nishihara — byte-identical |
 
 ## Registry disagreement — RESOLVED (license audit 2026-06-12)
 
