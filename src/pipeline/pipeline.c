@@ -186,6 +186,9 @@ void cbm_pipeline_free(cbm_pipeline_t *p) {
     p->excluded_dirs = NULL;
     p->excluded_count = 0;
     free(p->branch_qn);
+    free(p->saved_adr); /* freed here too: error paths can exit before the
+                         * restore in dump_and_persist_hashes runs. Issue #516. */
+    p->saved_adr = NULL;
     cbm_git_context_free(&p->git_ctx);
     /* gbuf, store, registry freed during/after run */
     /* Defensively free userconfig in case run() was never called or panicked */
@@ -890,9 +893,12 @@ static int dump_and_persist_hashes(cbm_pipeline_t *p, const cbm_file_info_t *fil
     if (hash_store) {
         cbm_store_delete_file_hashes(hash_store, p->project_name);
 
-        /* Restore the ADR captured before the dump. Issue #516. */
+        /* Restore the ADR captured before the dump. Surface a failed restore
+         * rather than silently dropping the ADR (the original #516 symptom). */
         if (p->saved_adr) {
-            cbm_store_adr_store(hash_store, p->project_name, p->saved_adr);
+            if (cbm_store_adr_store(hash_store, p->project_name, p->saved_adr) != CBM_STORE_OK) {
+                cbm_log_error("pipeline.err", "phase", "adr_restore", "project", p->project_name);
+            }
         }
         for (int i = 0; i < file_count; i++) {
             struct stat fst;
