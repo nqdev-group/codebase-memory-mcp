@@ -63,6 +63,9 @@ extern void suite_repro_new_cypher_limit_zero(void);
 extern void suite_repro_invariant_calls(void);
 extern void suite_repro_invariant_graph(void);
 extern void suite_repro_invariant_breadth(void);
+extern void suite_repro_invariant_enclosing_parity(void);
+extern void suite_repro_invariant_lsp_rescue(void);
+extern void suite_repro_invariant_discovery_fqn(void);
 
 int main(void) {
     /* Unbuffered: a reproduction may crash/_exit (or a sanitizer may _exit on a
@@ -111,6 +114,9 @@ int main(void) {
     RUN_SUITE(repro_invariant_calls);
     RUN_SUITE(repro_invariant_graph);
     RUN_SUITE(repro_invariant_breadth);
+    RUN_SUITE(repro_invariant_enclosing_parity);
+    RUN_SUITE(repro_invariant_lsp_rescue);
+    RUN_SUITE(repro_invariant_discovery_fqn);
 
     TEST_SUMMARY();
 }
