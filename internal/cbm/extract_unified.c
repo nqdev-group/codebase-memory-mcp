@@ -1153,8 +1153,7 @@ static void push_boundary_scopes(CBMExtractCtx *ctx, TSNode node, const CBMLangS
          * Push the function scope at the BODY using the preceding signature
          * sibling's QN, so the body's children attribute to the function. */
         TSNode prev = ts_node_prev_sibling(node);
-        while (!ts_node_is_null(prev) &&
-               strcmp(ts_node_type(prev), "function_signature") != 0 &&
+        while (!ts_node_is_null(prev) && strcmp(ts_node_type(prev), "function_signature") != 0 &&
                strcmp(ts_node_type(prev), "method_signature") != 0) {
             prev = ts_node_prev_sibling(prev);
         }

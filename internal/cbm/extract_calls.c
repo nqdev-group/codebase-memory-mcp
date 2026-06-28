@@ -1824,8 +1824,7 @@ static void extract_kotlin_desugared_calls(CBMExtractCtx *ctx, TSNode node, cons
                     continue;
                 }
                 comp++;
-                kt_push_implicit_call(ctx, node,
-                                      cbm_arena_sprintf(ctx->arena, "component%u", comp),
+                kt_push_implicit_call(ctx, node, cbm_arena_sprintf(ctx->arena, "component%u", comp),
                                       enclosing_func_qn);
             }
             break;
