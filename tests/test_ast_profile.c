@@ -88,7 +88,7 @@ TEST(ast_profile_to_str_null) {
 TEST(ast_profile_to_str_small_buf) {
     cbm_ast_profile_t p = make_profile();
     /* buf too small: should write empty string */
-    char buf[1] = "X";
+    char buf[1] = {'X'};
     cbm_ast_profile_to_str(&p, buf, 0);
     /* 0-length buffer: function should handle gracefully */
     PASS();
