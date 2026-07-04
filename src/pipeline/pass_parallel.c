@@ -1765,11 +1765,18 @@ static void emit_trpc_edge(cbm_gbuf_t *gbuf, const cbm_gbuf_node_t *source, cons
     cbm_gbuf_insert_edge(gbuf, source->id, route_id, "TRPC_CALLS", props);
 }
 
+/* When suppress_plain_calls is true (a TS/JS/TSX weak short-name member-call
+ * match, #592/#606), every service classification below still runs — only the
+ * plain CALLS fall-through (emit_normal_calls_edge) is skipped. detect_url_in_args
+ * and the HTTP/ASYNC/gRPC/GraphQL/tRPC/CONFIG/route branches are unaffected, so
+ * a verb-suffix HTTP client (api.patch('/x')), broker, or route registration
+ * keeps its edge; only the fabricated project CALLS edge is dropped. */
 static void emit_service_edge(cbm_gbuf_t *gbuf, const cbm_gbuf_node_t *source,
                               const cbm_gbuf_node_t *target, const CBMCall *call,
                               const cbm_resolution_t *res, const char *module_qn,
                               const cbm_registry_t *registry, const cbm_gbuf_t *main_gbuf,
-                              const char **imp_keys, const char **imp_vals, int imp_count) {
+                              const char **imp_keys, const char **imp_vals, int imp_count,
+                              bool suppress_plain_calls) {
     cbm_svc_kind_t svc = cbm_service_pattern_match(res->qualified_name);
     const char *arg = call->first_string_arg;
 
@@ -1815,7 +1822,7 @@ static void emit_service_edge(cbm_gbuf_t *gbuf, const cbm_gbuf_node_t *source,
         emit_trpc_edge(gbuf, source, call, res);
     } else if (svc == CBM_SVC_CONFIG) {
         emit_config_edge(gbuf, source, target, call, res, arg);
-    } else {
+    } else if (!suppress_plain_calls) {
         emit_normal_calls_edge(gbuf, source, target, call, res);
     }
 
@@ -2034,6 +2041,21 @@ static void resolve_file_calls(resolve_ctx_t *rc, resolve_worker_state_t *ws, CB
             continue;
         }
 
+        /* TS/JS/TSX weak-method suppression (#592/#606). The receiver-aware guard
+         * must NOT drop this call here: doing so would also skip the #523
+         * callee-name service bypass below, emit_service_edge's route/gRPC/config
+         * branches, and its unconditional detect_url_in_args (which classifies
+         * verb-suffix HTTP clients like api.patch('/x')). Instead, defer to the
+         * emit path and suppress ONLY the plain-CALLS fall-through
+         * (emit_normal_calls_edge), so every service edge stays main-identical by
+         * construction. res.strategy may carry an lsp_* value here (LSP-resolved
+         * calls keep res through this point); the helper's EXPLICIT drop-list
+         * leaves lsp_ts_method / lsp_cross untouched. See #606 direction. */
+        bool is_tsjs =
+            lang == CBM_LANG_JAVASCRIPT || lang == CBM_LANG_TYPESCRIPT || lang == CBM_LANG_TSX;
+        bool tsjs_drop_plain_call =
+            cbm_tsjs_suppress_weak_method_match(is_tsjs, call->is_method, res.strategy);
+
         /* Service-pattern HTTP/ASYNC client call (`requests.get(url)`): the
          * service signal lives in the callee_name. The registry can mis-resolve
          * it to a spurious builtin short-name match (`requests.get` ->
@@ -2054,7 +2076,7 @@ static void resolve_file_calls(resolve_ctx_t *rc, resolve_worker_state_t *ws, CB
                                             .strategy = "service_pattern"};
                 emit_service_edge(ws->local_edge_buf, source_node, source_node, call, &svc_res,
                                   module_qn, rc->registry, rc->main_gbuf, imp_keys, imp_vals,
-                                  imp_count);
+                                  imp_count, false);
                 continue;
             }
         }
@@ -2066,7 +2088,7 @@ static void resolve_file_calls(resolve_ctx_t *rc, resolve_worker_state_t *ws, CB
                                              .strategy = "callee_suffix"};
                 emit_service_edge(ws->local_edge_buf, source_node, source_node, call, &fake_res,
                                   module_qn, rc->registry, rc->main_gbuf, imp_keys, imp_vals,
-                                  imp_count);
+                                  imp_count, false);
             }
             continue;
         }
@@ -2097,7 +2119,8 @@ static void resolve_file_calls(resolve_ctx_t *rc, resolve_worker_state_t *ws, CB
                                      (psvc == CBM_SVC_ASYNC && strlen(u) > PP_ESC_SPACE));
                 if (url_or_topic) {
                     emit_service_edge(ws->local_edge_buf, source_node, NULL, call, &res, module_qn,
-                                      rc->registry, rc->main_gbuf, imp_keys, imp_vals, imp_count);
+                                      rc->registry, rc->main_gbuf, imp_keys, imp_vals, imp_count,
+                                      false);
                     ws->calls_resolved++;
                 }
             }
@@ -2105,7 +2128,8 @@ static void resolve_file_calls(resolve_ctx_t *rc, resolve_worker_state_t *ws, CB
         }
         _rc_t0 = extract_now_ns();
         emit_service_edge(ws->local_edge_buf, source_node, target_node, call, &res, module_qn,
-                          rc->registry, rc->main_gbuf, imp_keys, imp_vals, imp_count);
+                          rc->registry, rc->main_gbuf, imp_keys, imp_vals, imp_count,
+                          tsjs_drop_plain_call);
         atomic_fetch_add_explicit(&rc->time_ns_rc_emit, extract_now_ns() - _rc_t0,
                                   memory_order_relaxed);
         ws->calls_resolved++;
