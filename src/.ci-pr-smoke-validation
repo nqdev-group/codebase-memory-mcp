@@ -1,2 +1,0 @@
-Temporary marker to force the pr-smoke path filter (product=true) so the new
-build+smoke job runs on this PR for one validation pass. Dropped before merge.
