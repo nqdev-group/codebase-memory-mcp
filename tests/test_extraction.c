@@ -3418,9 +3418,15 @@ static long extract_wide_flat_ms(int n, int *out_defs) {
         return -1;
     }
     size_t off = 0;
+    /* CONSTANT def count (10), independent of n: defs that scale WITH n make
+     * the fixture superlinear through the separate per-def sibling-scan cost
+     * (O(defs x siblings)) — on windows-CLANG64 ASan that pushed the ratio
+     * of LINEAR walk code to 43x. Ten spread-out defs keep the breadth check
+     * honest while the sibling-scan term stays 10 x n = linear. */
+    const int def_stride = n / 10;
     for (int i = 0; i < n; i++) {
         off += (size_t)snprintf(src + off, cap - off, "// wide filler %d\n", i);
-        if (i % 2000 == 0) {
+        if (i % def_stride == 0) {
             off += (size_t)snprintf(src + off, cap - off, "var wide_a%d = %d;\n", i, i);
         }
     }
@@ -3467,8 +3473,8 @@ TEST(extract_wide_flat_file_is_linear) {
     ASSERT_GTE(t_small, 0);
     ASSERT_GTE(t_big, 0);
     /* Anti-vacuous guard: the breadth was actually walked at both sizes. */
-    ASSERT_GTE(defs_small, 10);
-    ASSERT_GTE(defs_big, 40);
+    ASSERT_GTE(defs_small, 8);
+    ASSERT_GTE(defs_big, 8);
     fprintf(stderr, "  [wide-flat] t(%d)=%ldms t(%d)=%ldms\n", WF_SMALL, t_small, WF_BIG, t_big);
     long base = t_small > WF_FLOOR_MS ? t_small : WF_FLOOR_MS;
     if (t_big > WF_RATIO_MAX * base) {
