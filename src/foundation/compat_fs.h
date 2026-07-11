@@ -46,6 +46,10 @@ bool cbm_mkdir_p(const char *path, int mode);
 
 /* Delete a file. Returns 0 on success. */
 int cbm_unlink(const char *path);
+/* Remove <db_path>-wal/-shm. MUST be called by any path installing a fresh
+ * DB file where a previous generation lived — a leftover WAL is otherwise
+ * replayed on top of the new file at the next open (#897). */
+void cbm_remove_db_sidecars(const char *db_path);
 
 /* Delete an empty directory. Returns 0 on success. */
 int cbm_rmdir(const char *path);

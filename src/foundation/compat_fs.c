@@ -713,3 +713,25 @@ int cbm_exec_no_shell(const char *const *argv) {
 }
 
 #endif /* _WIN32 */
+
+/* Remove a SQLite database's -wal/-shm sidecars (both platforms). Any code
+ * path that installs a FRESH database file at a path where a previous
+ * generation lived must call this first: SQLite decides whether to replay a
+ * WAL purely from the sidecar's own header/checksums, so a leftover WAL
+ * from a crashed session is recovered ON TOP of the freshly installed file
+ * at the next open, splicing old-generation pages into it (#897). */
+void cbm_remove_db_sidecars(const char *db_path) {
+    if (!db_path || !db_path[0]) {
+        return;
+    }
+    enum { SIDECAR_PATH_MAX = 4096 };
+    char side[SIDECAR_PATH_MAX];
+    int n = snprintf(side, sizeof(side), "%s-wal", db_path);
+    if (n > 0 && (size_t)n < sizeof(side)) {
+        (void)cbm_unlink(side);
+    }
+    n = snprintf(side, sizeof(side), "%s-shm", db_path);
+    if (n > 0 && (size_t)n < sizeof(side)) {
+        (void)cbm_unlink(side);
+    }
+}
