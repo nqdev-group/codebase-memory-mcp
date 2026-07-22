@@ -1,0 +1,16 @@
+name: codebase-memory-mcp
+id: ari:cloud:compass:d080ee26-f21d-4730-84de-98c025104c05:component/e09ef9ad-8d69-4877-b0ee-7395c9ca13a3/9bb4b6c1-2064-416e-aa93-cdcc39b73fc1
+description: High-performance code intelligence MCP server. Indexes codebases into a persistent knowledge graph — average repo in milliseconds. 158 languages, sub-ms queries, 99% fewer tokens. Single static binary, zero dependencies.
+configVersion: 1
+typeId: SERVICE
+fields:
+  tier: 4
+links:
+  - name: null
+    type: REPOSITORY
+    url: https://github.com/nqdev-group/codebase-memory-mcp
+relationships:
+  DEPENDS_ON: []
+labels:
+  - source:github
+customFields: null
